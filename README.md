@@ -1,5 +1,7 @@
 ActivityStrea.ms in Node.js on MongoDB.
 
+Stability: Very unstable, incomplete, work-in-progress.
+
 Connect to the database.
 
 ```javascript

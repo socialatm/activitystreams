@@ -1,9 +1,10 @@
 import FlatFeed from './flatFeed'
 
 class Store {
-  constructor(collections,opts){
+  constructor(collections,opts,pubsub){
     this.collections = collections
     this.opts = opts
+    this.pubsub = pubsub
   }
   feed(id){
     return new FlatFeed(id,this)
@@ -87,10 +88,15 @@ function getStoreCollections(db, name){
   })
 }
 
-function init(collections){
+function init(name,collections,pubsub){
   return new Promise((resolve,reject)=>{
-    // todo: read meta first ...
-    resolve(new Store(collections,{}))
+    collections.meta.find({ name }, (err,result)=>{
+      if (err) {
+        reject(err)
+      } else {
+        resolve(new Store(collections,result,pubsub))
+      }
+    })
   })
 }
 
@@ -98,18 +104,20 @@ const DEFAULT_OPTS = {
   feed_size_limit: 1000
 }
 
-function createMeta(name,collections,opts){
+function createMeta(name,collections,opts,pubsub){
   return new Promise((resolve,reject)=>{
     if (opts.update) {
+      delete opts.update
       collections.meta.update({ name },
-      Object.assign({ name }, DEFAULT_OPTS, opts),
-      (err,result)=>{
-        if (err) {
-          reject(err)
-        } else {
-          resolve(new Store(collections,result))
+        Object.assign({ name }, DEFAULT_OPTS, opts),
+        (err,result)=>{
+          if (err) {
+            reject(err)
+          } else {
+            resolve(new Store(collections,result,pubsub))
+          }
         }
-      })
+      )
     } else {
       collections.meta.insert(
         Object.assign({ name }, DEFAULT_OPTS, opts),
@@ -117,7 +125,7 @@ function createMeta(name,collections,opts){
           if (err) {
             reject(err)
           } else {
-            resolve(new Store(collections,result))
+            resolve(new Store(collections,result,pubsub))
           }
         }
       )
@@ -145,7 +153,7 @@ class FlatFeedStore {
   }
   static create(db, name, opts){
     return new Promise((resolve,reject)=>{
-      if (cache[name] && !opts.update){
+      if (cache.get(name) && !opts.update){
         reject(new Error('store exists and you did not specify `update:true` in opts'))
       } else {
         const ensured = ensureStoreCollections(db, name)
@@ -155,14 +163,14 @@ class FlatFeedStore {
       }
     })
   }
-  static get(db, name){
+  static get(db, name, pubsub){
     return new Promise((resolve,reject)=>{
       const cached = cache.get(name)
       if (cached) {
         resolve(cached)
       } else {
         getStoreCollections(db,name)
-          .then(init)
+          .then(collections => init(name,collections,pubsub))
           .then(store => { cache.put(name,store); resolve(store) })
           .catch(reject)
       }

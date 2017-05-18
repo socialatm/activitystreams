@@ -1,9 +1,20 @@
 import FlatFeedStore from '../lib/flatStore'
 
-function mockCollection(name){
+function mockCollection(name,content){
   return {
     collectionName: name,
     insert: (doc,cb) => {
+      cb(null,doc)
+    },
+    find: (query,cb) => {
+      const result = content[JSON.stringify(query)]
+      if (typeof result === 'Error') {
+        cb(result)
+      } else {
+        cb(null,result)
+      }
+    },
+    update: (query,doc,cb) => {
       cb(null,doc)
     }
   }
@@ -84,4 +95,23 @@ test('default feed_size_limit can be overridden', async () => {
   const store = await FlatFeedStore.create(mockDB(), 'test', { feed_size_limit: 300 })
       , feed = store.feed('a-feed-id')
   expect(feed.opts.feed_size_limit).toBe(300)
+})
+
+test('accidental updates prevented by requiring `update:true` opt', async () => {
+  expect.assertions(1)
+  try {
+    const db = mockDB()
+        , store = await FlatFeedStore.create(db, 'test', { feed_size_limit: 300 })
+        , again = await FlatFeedStore.create(db, 'test', { feed_size_limit: 20 })
+  } catch (err) {
+    expect(err.message).toBe('store exists and you did not specify `update:true` in opts')
+  }
+})
+
+test('can update store opts by specifying `update:true`', async () => {
+  expect.assertions(1)
+  const db = mockDB()
+      , store = await FlatFeedStore.create(db, 'test', { feed_size_limit: 300 })
+      , again = await FlatFeedStore.create(db, 'test', { feed_size_limit: 20, update:true })
+  expect(again).toBeDefined()
 })
